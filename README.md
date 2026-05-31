@@ -81,29 +81,47 @@ For multi-vCPU servers, use **PM2** to spawn one Node.js process per vCPU. With 
 | 4 vCPU | ~8,000 - 12,000 |
 | 8 vCPU | ~16,000 - 24,000 |
 
-#### Quick Start with PM2
+#### PM2 Commands Cheat Sheet
 
 ```bash
-# Install PM2 globally
+# Install PM2 globally (one-time)
 npm install -g pm2
 
 # (Optional) Add Redis URL to .env for cross-process event sync
 # REDIS_URL=redis://localhost:6379
 
-# Start with PM2 (auto-detects vCPU count)
-pm2 start ecosystem.config.cjs
+# ─── START ──────────────────────────────────────────
+pm2 start ecosystem.config.cjs         # Start all instances
+pm2 start ecosystem.config.cjs -i 4    # Start 4 instances explicitly
 
-# Or explicitly set instance count:
-pm2 start ecosystem.config.cjs -i 4
+# ─── STOP ───────────────────────────────────────────
+pm2 stop evback                        # Pause all evback processes
+pm2 stop 0                             # Pause process with ID 0
+pm2 stop all                           # Pause all PM2 processes
 
-# Zero-downtime reload after code changes:
-pm2 reload ecosystem.config.cjs
+# ─── RESTART ────────────────────────────────────────
+pm2 restart evback                     # Hard restart (disconnects clients)
+pm2 restart all                        # Restart all PM2 processes
 
-# View dashboard
-pm2 monit
+# ─── ZERO-DOWNTIME RELOAD ──────────────────────────
+pm2 reload ecosystem.config.cjs        # Restart one by one (no downtime)
 
-# View logs
-pm2 logs evback
+# ─── DELETE (remove from PM2 list) ─────────────────
+pm2 delete evback                      # Stop + remove evback from PM2
+pm2 delete 0                           # Stop + remove process ID 0
+pm2 delete all                         # Stop + remove ALL PM2 processes
+
+# ─── MONITORING ────────────────────────────────────
+pm2 list                               # Show all processes & status
+pm2 status                             # Same as list
+pm2 monit                              # Real-time CPU/RAM dashboard
+pm2 logs evback                        # Live logs
+pm2 logs evback --lines 100            # Last 100 log lines
+pm2 show evback                        # Detailed process info
+
+# ─── SAVE / STARTUP ────────────────────────────────
+pm2 save                               # Save current process list
+pm2 startup                            # Auto-start on server reboot
 ```
 
 #### Architecture: How Redis syncs SSE across PM2 processes
