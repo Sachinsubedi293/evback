@@ -45,29 +45,84 @@ SSE is a simpler, HTTP-native protocol that is **perfect for exam scenarios** wh
 
 #### Scaling Beyond a Single Process
 
-| Scale | Strategy |
-|-------|----------|
-| **3,000 - 10,000** users | Add Node.js `cluster` module + Redis Pub/Sub as a cross-process message broker |
-| **10,000 - 50,000** users | Dedicated SSE server with Redis-backed rooms (e.g., `ioredis` subscription per exam) |
-| **100,000+** users | Managed real-time service (Pusher, Ably, Supabase Realtime) or WebSocket on horizontally scaled infrastructure |
+| Scale | Strategy | Implementation |
+|-------|----------|----------------|
+| **3,000 - 10,000** users | PM2 cluster mode + Redis Pub/Sub | ✅ Built-in (set `REDIS_URL` in `.env`) |
+| **10,000 - 50,000** users | Dedicated SSE server with Redis-backed rooms | Extend `sse.js` with horizontal instances |
+| **100,000+** users | Managed real-time service (Pusher, Ably, Supabase Realtime) | Replace SSE with managed infrastructure |
 
-#### Scaling Blueprint for Cluster Mode
+### PM2 + Redis Cluster Mode (Production)
 
-```javascript
-// Concept — not implemented yet
-import { createClient } from "redis";
-import { Cluster } from "cluster";
+For multi-vCPU servers, use **PM2** to spawn one Node.js process per vCPU. With **Redis Pub/Sub**, all processes stay in sync so a student receives events regardless of which process handles their SSE connection.
 
-const pub = createClient();
-const sub = createClient();
+```
+                      ┌──────────────────────┐
+                      │   Load Balancer       │
+                      │  (Round Robin ports)  │
+                      └──────┬────────┬───────┘
+                             │        │
+                    ┌────────┴──┐ ┌───┴────────┐
+                    │ PM2 Proc 1│ │ PM2 Proc 2 │  (one per vCPU)
+                    │ :8001     │ │ :8002      │
+                    └─────┬─────┘ └──────┬─────┘
+                          │              │
+                    ┌─────┴──────────────┴─────┐
+                    │    Redis Pub/Sub          │
+                    │  Channel: "sse:events"    │
+                    └───────────────────────────┘
+```
 
-sub.subscribe("exam:events", (message) => {
-  const { room, event, data } = JSON.parse(message);
-  emitToRoom(room, event, data);
-});
+#### Capacity With PM2 + Redis
 
-// When emitting across processes:
-pub.publish("exam:events", JSON.stringify({ room, event, data }));
+| vCPUs | Estimated Concurrent SSE Clients |
+|-------|----------------------------------|
+| 1 vCPU | ~2,000 - 3,000 |
+| 2 vCPU | ~4,000 - 6,000 |
+| 4 vCPU | ~8,000 - 12,000 |
+| 8 vCPU | ~16,000 - 24,000 |
+
+#### Quick Start with PM2
+
+```bash
+# Install PM2 globally
+npm install -g pm2
+
+# (Optional) Add Redis URL to .env for cross-process event sync
+# REDIS_URL=redis://localhost:6379
+
+# Start with PM2 (auto-detects vCPU count)
+pm2 start ecosystem.config.cjs
+
+# Or explicitly set instance count:
+pm2 start ecosystem.config.cjs -i 4
+
+# Zero-downtime reload after code changes:
+pm2 reload ecosystem.config.cjs
+
+# View dashboard
+pm2 monit
+
+# View logs
+pm2 logs evback
+```
+
+#### Architecture: How Redis syncs SSE across PM2 processes
+
+The `src/sse.js` module implements the complete Redis Pub/Sub pattern:
+
+1. **`emit(event, data)`** — Writes to local clients + publishes to Redis
+2. **`emitToRoom(room, event, data)`** — Writes to local room clients + publishes room-scoped event to Redis
+3. **Redis subscriber** — All PM2 processes receive the published message and forward it to their local clients
+
+**Fallback behavior:** If `REDIS_URL` is not set in `.env`, Redis is skipped entirely. Each PM2 process handles its own clients independently. This works for single-instance deployments but means a student connected to Process 1 won't receive events emitted from Process 2.
+
+**Auto-recovery:** If Redis becomes unreachable, the module logs a warning and continues in single-process mode. When Redis comes back, restart PM2 to re-establish the connection.
+
+#### Environment Variables for PM2
+
+```bash
+# .env — add for cross-process SSE sync
+REDIS_URL=redis://localhost:6379
 ```
 
 ## API Endpoints

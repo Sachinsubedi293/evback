@@ -4,7 +4,7 @@ dotenv.config();
 
 import cpeak, { parseJSON, cors } from "cpeak";
 
-import { setupSSE, startHeartbeat, joinRoom } from "./sse.js";
+import { setupSSE, startHeartbeat, joinRoom, initRedis } from "./sse.js";
 
 import authRoute from "./Router/authRoute.js";
 import questionRoute from "./Router/questionRoute.js";
@@ -39,6 +39,9 @@ app.route("get", "/events", (req, res) => {
     joinRoom(client, req.query.room);
   }
 });
+
+// Initialize Redis Pub/Sub for multi-process scaling (if REDIS_URL is set)
+initRedis();
 
 // Start heartbeat to detect stale connections
 startHeartbeat();
