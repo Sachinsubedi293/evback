@@ -1,20 +1,22 @@
-const User = require('../Models/user.model');
-const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
-require('dotenv').config();
-const { v4: uuidv4 } = require('uuid');
+import User from "../Models/user.model.js";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import dotenv from "dotenv";
+import { v4 as uuidv4 } from "uuid";
+
+dotenv.config();
 
 const generateAccessToken = (userId, role, code) => {
-  return jwt.sign({ userId, role, Code:code }, process.env.JWT_SECRET, { expiresIn: '1d' });
+  return jwt.sign({ userId, role, Code: code }, process.env.JWT_SECRET, { expiresIn: "1d" });
 };
 
 const generateRefreshToken = (userId) => {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '20d' });
+  return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: "20d" });
 };
 
 function generateUniqueCode() {
-  const uuid = uuidv4().replace(/-/g, '');
-  const intVal = BigInt('0x' + uuid);
+  const uuid = uuidv4().replace(/-/g, "");
+  const intVal = BigInt("0x" + uuid);
   const normalizedVal = Number(intVal % BigInt(1e18)) / 1e18;
   const uniqueCode = 0.001 + normalizedVal * (0.999 - 0.001);
   return uniqueCode.toFixed(3);
@@ -26,26 +28,25 @@ const signup = async (req, res) => {
   try {
     const existingUser = await User.findOne({ $or: [{ username }, { email }] });
     if (existingUser) {
-      return res.status(400).json({ error: 'Username or email already exists' });
+      return res.status(400).json({ error: "Username or email already exists" });
     }
 
     const uniqueCode = generateUniqueCode();
-console.log(uniqueCode)
-    const newUser = new User({ 
-      Code: uniqueCode, 
-      username, 
-      email, 
-      password, // Store plain password
-      fullname, 
-      role 
+    const newUser = new User({
+      Code: uniqueCode,
+      username,
+      email,
+      password,
+      fullname,
+      role,
     });
 
     await newUser.save();
 
-    res.status(201).json({ message: 'User created successfully' });
+    res.status(201).json({ message: "User created successfully" });
   } catch (error) {
-    console.error('Error signing up:', error);
-    res.status(500).json({ error: 'Failed to sign up' });
+    console.error("Error signing up:", error);
+    res.status(500).json({ error: "Failed to sign up" });
   }
 };
 
@@ -55,15 +56,15 @@ const createStudents = async (req, res) => {
 
     const token = req.headers.authorization;
     if (!token) {
-      return res.status(401).json({ error: 'No token provided' });
+      return res.status(401).json({ error: "No token provided" });
     }
 
-    const tokenPart = token.split(' ')[1]; 
+    const tokenPart = token.split(" ")[1];
     const decodedToken = jwt.verify(tokenPart, process.env.JWT_SECRET);
-    
+
     const user = await User.findById(decodedToken.userId);
-    if (!user || user.role !== 'admin') {
-      return res.status(401).json({ error: 'Unauthorized' });
+    if (!user || user.role !== "admin") {
+      return res.status(401).json({ error: "Unauthorized" });
     }
 
     const students = [];
@@ -93,10 +94,10 @@ const createStudents = async (req, res) => {
 
       const student = new User({
         username,
-        password: `${password}${uniqueNumber}`, // Store plain password
-        role: 'student',
+        password: `${password}${uniqueNumber}`,
+        role: "student",
         email,
-        Code:code
+        Code: code,
       });
 
       students.push(student);
@@ -106,8 +107,8 @@ const createStudents = async (req, res) => {
 
     res.json(createdStudents);
   } catch (error) {
-    console.error('Error creating students:', error);
-    res.status(500).json({ message: 'Error creating students' });
+    console.error("Error creating students:", error);
+    res.status(500).json({ message: "Error creating students" });
   }
 };
 
@@ -117,13 +118,12 @@ const login = async (req, res) => {
   try {
     const user = await User.findOne({ username });
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ error: "User not found" });
     }
 
-    // Compare plaintext passwords directly
-    const isPasswordMatch = password === user.password; 
+    const isPasswordMatch = password === user.password;
     if (!isPasswordMatch) {
-      return res.status(401).json({ error: 'Invalid password' });
+      return res.status(401).json({ error: "Invalid password" });
     }
 
     const accessToken = generateAccessToken(user._id, user.role, user.Code);
@@ -132,10 +132,15 @@ const login = async (req, res) => {
     user.refreshToken = refreshToken;
     await user.save();
 
-    res.status(200).json({ message: 'Login successful',admin:user.role=='admin'?true:false, accessToken, refreshToken });
+    res.status(200).json({
+      message: "Login successful",
+      admin: user.role == "admin" ? true : false,
+      accessToken,
+      refreshToken,
+    });
   } catch (error) {
-    console.error('Error logging in:', error);
-    res.status(500).json({ error: 'Failed to log in' });
+    console.error("Error logging in:", error);
+    res.status(500).json({ error: "Failed to log in" });
   }
 };
 
@@ -143,72 +148,71 @@ const refreshToken = async (req, res) => {
   const { refreshToken } = req.body;
 
   if (!refreshToken) {
-    return res.status(400).json({ error: 'Refresh token not provided' });
+    return res.status(400).json({ error: "Refresh token not provided" });
   }
 
   try {
     const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
     const user = await User.findById(decoded.userId);
     if (!user) {
-      return res.status(401).json({ error: 'Invalid refresh token' });
+      return res.status(401).json({ error: "Invalid refresh token" });
     }
 
     const accessToken = generateAccessToken(user._id, user.role, user.Code);
 
     return res.status(200).json({ accessToken });
   } catch (error) {
-    console.error('Error refreshing token:', error.message);
+    console.error("Error refreshing token:", error.message);
 
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({ error: 'Refresh token expired' });
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({ error: "Refresh token expired" });
     }
 
-    if (error.name === 'JsonWebTokenError') {
-      return res.status(401).json({ error: 'Invalid refresh token' });
+    if (error.name === "JsonWebTokenError") {
+      return res.status(401).json({ error: "Invalid refresh token" });
     }
 
-    return res.status(500).json({ error: 'Failed to refresh token' });
+    return res.status(500).json({ error: "Failed to refresh token" });
   }
 };
 
 const getStudents = async (req, res) => {
   try {
-    const students = await User.find({ role: 'student' });
+    const students = await User.find({ role: "student" });
     res.json(students);
   } catch (error) {
-    console.error('Error fetching students:', error);
-    res.status(500).json({ message: 'Error fetching students' });
+    console.error("Error fetching students:", error);
+    res.status(500).json({ message: "Error fetching students" });
   }
 };
-
 
 const deleteStudents = async (req, res) => {
   try {
     const token = req.headers.authorization;
     if (!token) {
-      return res.status(401).json({ error: 'No token provided' });
+      return res.status(401).json({ error: "No token provided" });
     }
 
-    const tokenPart = token.split(' ')[1]; 
+    const tokenPart = token.split(" ")[1];
     const decodedToken = jwt.verify(tokenPart, process.env.JWT_SECRET);
-    
+
     const user = await User.findById(decodedToken.userId);
-    if (!user || user.role !== 'admin') {
-      return res.status(401).json({ error: 'Unauthorized' });
+    if (!user || user.role !== "admin") {
+      return res.status(401).json({ error: "Unauthorized" });
     }
 
-    await User.deleteMany({ role: 'student' });
-    res.status(200).json({ message: 'All student users deleted successfully' });
+    await User.deleteMany({ role: "student" });
+    res.status(200).json({ message: "All student users deleted successfully" });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to delete student users' });
+    res.status(500).json({ error: "Failed to delete student users" });
   }
 };
 
-module.exports = {
+export default {
   signup,
   login,
   getStudents,
   refreshToken,
   createStudents,
-  deleteStudents
+  deleteStudents,
 };

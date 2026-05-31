@@ -1,15 +1,15 @@
-const Answer = require("../Models/answer.model");
-const jwt = require("jsonwebtoken");
-const User = require("../Models/user.model");
-const { calculateAndSaveResult } = require("../Calc");
-const mongoose = require("mongoose");
+import Answer from "../Models/answer.model.js";
+import jwt from "jsonwebtoken";
+import User from "../Models/user.model.js";
+import { calculateAndSaveResult } from "../Calc.js";
+import mongoose from "mongoose";
+
 const jwtverify = (token) => {
-  const tokenPart = token.split(" ")[1]; // Splitting 'Bearer <token>' to get '<token>'
+  const tokenPart = token.split(" ")[1];
   return jwt.verify(tokenPart, process.env.JWT_SECRET);
 };
 
 const answerController = {
-  // Controller function to submit answers
   submitAnswers: async (req, res) => {
     try {
       const token = req.headers.authorization;
@@ -26,24 +26,23 @@ const answerController = {
 
       const { userId, answers, exam } = req.body;
 
-      const ans = Answer.find({ user: userId });
-      if (ans.exam == exam) {
+      const ans = await Answer.find({ user: userId });
+      const alreadySubmitted = ans.some((a) => String(a.exam) === exam);
+      if (alreadySubmitted) {
         return res.status(200).json({ error: "Already Submitted" });
       }
-      // Convert answers object into an array of answer objects for Mongoose schema
+
       const answersArray = Object.keys(answers).map((questionId) => ({
-        questionId: new mongoose.Types.ObjectId(questionId), // Correct usage with 'new'
+        questionId: new mongoose.Types.ObjectId(questionId),
         answer: answers[questionId],
       }));
 
-      // Create a new Answer instance
       const newAnswer = new Answer({
-        user: new mongoose.Types.ObjectId(userId), // Correct usage with 'new'
+        user: new mongoose.Types.ObjectId(userId),
         answers: answersArray,
-        exam: new mongoose.Types.ObjectId(exam), // Correct usage with 'new'
+        exam: new mongoose.Types.ObjectId(exam),
       });
 
-      // Save the Answer document to the database
       await newAnswer.save();
 
       calculateAndSaveResult(userId, exam);
@@ -55,7 +54,6 @@ const answerController = {
     }
   },
 
-  // Controller function to retrieve answers
   getAnswers: async (req, res) => {
     try {
       const answers = await Answer.find();
@@ -66,7 +64,6 @@ const answerController = {
     }
   },
 
-  // Controller function to update an answer
   updateAnswer: async (req, res) => {
     try {
       const answerId = req.params.id;
@@ -82,7 +79,6 @@ const answerController = {
     }
   },
 
-  // Controller function to delete an answer
   deleteAnswer: async (req, res) => {
     try {
       const answerId = req.params.id;
@@ -95,4 +91,4 @@ const answerController = {
   },
 };
 
-module.exports = answerController;
+export default answerController;

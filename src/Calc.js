@@ -1,7 +1,7 @@
-const mongoose = require("mongoose");
-const Question = require("./Models/questions.model");
-const Answer = require("./Models/answer.model");
-const Result = require("./Models/result.model");
+import mongoose from "mongoose";
+import Question from "./Models/questions.model.js";
+import Answer from "./Models/answer.model.js";
+import Result from "./Models/result.model.js";
 
 const fetchandcalc = async (questionId, ans) => {
   try {
@@ -88,4 +88,4 @@ async function saveResult(examId, studentId, obtainedMarks) {
   }
 }
 
-module.exports = { calculateAndSaveResult };
+export { calculateAndSaveResult };

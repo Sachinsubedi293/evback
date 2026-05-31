@@ -1,22 +1,12 @@
-// routes/authRoutes.js
+import authController from "../Controller/authController.js";
 
-const express = require('express');
-const router = express.Router();
-const authController = require('../Controller/authController');
+const authRoute = (app, prefix) => {
+  app.route("post", `${prefix}/signup`, authController.signup);
+  app.route("post", `${prefix}/login`, authController.login);
+  app.route("post", `${prefix}/refresh`, authController.refreshToken);
+  app.route("get", `${prefix}/students`, authController.getStudents);
+  app.route("post", `${prefix}/students`, authController.createStudents);
+  app.route("delete", `${prefix}/delstudents`, authController.deleteStudents);
+};
 
-// Route for user signup
-router.post('/signup', authController.signup);
-
-// Route for user login
-router.post('/login', authController.login);
-
-//Route for Refresh Token
-router.post('/refresh', authController.refreshToken);
-
-router.get('/students',authController.getStudents);
-
-router.post('/students', authController.createStudents);
-
-router.delete('/delstudents', authController.deleteStudents);
-
-module.exports = router;
+export default authRoute;

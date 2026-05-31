@@ -1,20 +1,11 @@
-const express = require('express');
-const router = express.Router();
-const questionController = require('../Controller/questionController');
+import questionController from "../Controller/questionController.js";
 
-// Route to create a new quiz question
-router.post('/questions', questionController.createQuestion);
+const questionRoute = (app, prefix) => {
+  app.route("post", `${prefix}/questions`, questionController.createQuestion);
+  app.route("get", `${prefix}/questions`, questionController.getAllQuestions);
+  app.route("get", `${prefix}/questions/:id`, questionController.getQuestionById);
+  app.route("put", `${prefix}/questions/:id`, questionController.updateQuestionById);
+  app.route("delete", `${prefix}/questions/:id`, questionController.deleteQuestionById);
+};
 
-// Route to get all quiz questions
-router.get('/questions', questionController.getAllQuestions);
-
-// Route to get a specific quiz question by ID
-router.get('/questions/:id', questionController.getQuestionById);
-
-// Route to update a quiz question by ID
-router.put('/questions/:id', questionController.updateQuestionById);
-
-// Route to delete a quiz question by ID
-router.delete('/questions/:id', questionController.deleteQuestionById);
-
-module.exports = router;
+export default questionRoute;

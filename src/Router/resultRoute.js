@@ -1,8 +1,7 @@
-const express = require('express');
-const router = express.Router();
-const resultController = require('../Controller/resultController'); // Import the controller
+import { getresult } from "../Controller/resultController.js";
 
-// Route for retrieving answers
-router.get('/results', resultController.getresult);
+const resultRoute = (app, prefix) => {
+  app.route("get", `${prefix}/results`, getresult);
+};
 
-module.exports = router;
+export default resultRoute;

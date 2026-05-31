@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from "mongoose";
 
 const examSchema = new mongoose.Schema({
   name: {
@@ -23,20 +23,19 @@ const examSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['scheduled', 'ongoing', 'completed'], // Define possible values for status
-    default: 'scheduled', // Default status when creating a new exam
+    enum: ["scheduled", "ongoing", "completed"],
+    default: "scheduled",
   },
-  Code:{
-    type:Number,
-    required: true
+  Code: {
+    type: Number,
+    required: true,
   },
   created_date: {
     type: Date,
     default: Date.now,
   },
 });
-// Create Exam model from the schema
-const Exam = mongoose.model('Exam', examSchema);
 
-// Export the Exam model
-module.exports = Exam;
+const Exam = mongoose.model("Exam", examSchema);
+
+export default Exam;

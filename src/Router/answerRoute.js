@@ -1,19 +1,10 @@
-const express = require('express');
-const router = express.Router();
-const answerController = require('../Controller/answerController');
+import answerController from "../Controller/answerController.js";
 
-// Route for submitting answers
-router.post('/answers', answerController.submitAnswers);
+const answerRoute = (app, prefix) => {
+  app.route("post", `${prefix}/answers`, answerController.submitAnswers);
+  app.route("get", `${prefix}/answers`, answerController.getAnswers);
+  app.route("put", `${prefix}/answers/:id`, answerController.updateAnswer);
+  app.route("delete", `${prefix}/answers/:id`, answerController.deleteAnswer);
+};
 
-// Route for retrieving answers
-router.get('/answers', answerController.getAnswers);
-
-// Route for updating answers
-router.put('/answers/:id', answerController.updateAnswer);
-
-// Route for deleting answers
-router.delete('/answers/:id', answerController.deleteAnswer);
-
-
-
-module.exports = router;
+export default answerRoute;

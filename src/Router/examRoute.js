@@ -1,21 +1,18 @@
-const express = require('express');
-const router = express.Router();
-const { createExam, getAllExams,getOngoingExams, deleteExam } = require('../Controller/examController');
+import {
+  createExam,
+  getAllExams,
+  getOngoingExams,
+  deleteExam,
+} from "../Controller/examController.js";
 
-// Route for creating a new exam
-router.post('/exam', createExam);
-
-// Route for getting all exams
-
-router.get('/exam',getOngoingExams );
-
-router.get('/allexam', getAllExams);
-
-router.delete('/delexam', deleteExam );
-
-
-router.get('/server-time', (req, res) => {
-    res.json({ serverTime: new Date().toISOString() });
+const examRoute = (app, prefix) => {
+  app.route("post", `${prefix}/exam`, createExam);
+  app.route("get", `${prefix}/exam`, getOngoingExams);
+  app.route("get", `${prefix}/allexam`, getAllExams);
+  app.route("delete", `${prefix}/delexam`, deleteExam);
+  app.route("get", `${prefix}/server-time`, (req, res) => {
+    return res.json({ serverTime: new Date().toISOString() });
   });
+};
 
-module.exports = router;
+export default examRoute;
