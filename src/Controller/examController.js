@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
 import schedule from "node-schedule";
 import User from "../Models/user.model.js";
 import Exam from "../Models/exam.model.js";
@@ -443,6 +444,9 @@ export const getAllExams = async (req, res) => {
 export const getExamById = async (req, res) => {
   try {
     const { examId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(examId)) {
+      return res.status(400).json({ error: "Invalid exam ID" });
+    }
     const token = req.headers.authorization;
     const user = await getAuthenticatedUser(token);
     const exam = await Exam.findById(examId);
@@ -499,6 +503,9 @@ export const getInviteLink = async (req, res) => {
     }
 
     const { examId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(examId)) {
+      return res.status(400).json({ error: "Invalid exam ID" });
+    }
     const exam = await Exam.findById(examId);
     if (!exam) {
       return res.status(404).json({ error: "Exam not found" });
@@ -522,6 +529,9 @@ export const getInviteLink = async (req, res) => {
 export const deleteExam = async (req, res) => {
   try {
     const { examid } = req.body;
+    if (!mongoose.Types.ObjectId.isValid(examid)) {
+      return res.status(400).json({ error: "Invalid exam ID" });
+    }
     const token = req.headers.authorization;
     if (!token) {
       return res.status(401).json({ error: "No token provided" });
