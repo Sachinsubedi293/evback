@@ -44,7 +44,7 @@ let redisEnabled = false;
 export function initRedis() {
   if (!REDIS_URL) {
     console.log(
-      "[SSE] REDIS_URL not set — running in single-process mode. For multi-instance scaling, set REDIS_URL."
+      "[SSE] REDIS_URL not set — running in single-process mode. For multi-instance scaling, set REDIS_URL.",
     );
     return;
   }
@@ -54,7 +54,9 @@ export function initRedis() {
       maxRetriesPerRequest: 3,
       retryStrategy: (times) => {
         if (times > 5) {
-          console.error("[SSE] Redis connection failed after 5 retries — falling back to single-process mode");
+          console.error(
+            "[SSE] Redis connection failed after 5 retries — falling back to single-process mode",
+          );
           redisEnabled = false;
           return null; // stop retrying
         }
@@ -80,7 +82,9 @@ export function initRedis() {
         redisEnabled = false;
         return;
       }
-      console.log(`[SSE] Redis subscribed to channel "${REDIS_CHANNEL}" (${count} subs)`);
+      console.log(
+        `[SSE] Redis subscribed to channel "${REDIS_CHANNEL}" (${count} subs)`,
+      );
       redisEnabled = true;
     });
 
@@ -95,7 +99,9 @@ export function initRedis() {
             if (client.rooms && client.rooms.has(room)) {
               setImmediate(() => {
                 try {
-                  client.res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+                  client.res.write(
+                    `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`,
+                  );
                   client.lastActivity = Date.now();
                 } catch {
                   clients.delete(client);
@@ -108,7 +114,9 @@ export function initRedis() {
           for (const client of clients) {
             setImmediate(() => {
               try {
-                client.res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+                client.res.write(
+                  `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`,
+                );
                 client.lastActivity = Date.now();
               } catch {
                 clients.delete(client);
@@ -145,7 +153,8 @@ export function setupSSE(req, res) {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
     Connection: "keep-alive",
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": "http://localhost:3000",
+    "Access-Control-Allow-Credentials": "true",
   });
 
   // Send an initial comment to flush headers
@@ -217,10 +226,7 @@ function writeToLocalClients(room, event, data) {
 function publishToRedis(room, event, data) {
   if (!redisEnabled || !pub) return;
   try {
-    pub.publish(
-      REDIS_CHANNEL,
-      JSON.stringify({ event, data, room })
-    );
+    pub.publish(REDIS_CHANNEL, JSON.stringify({ event, data, room }));
   } catch (err) {
     console.error("[SSE] Redis publish error:", err.message);
   }

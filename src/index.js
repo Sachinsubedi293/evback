@@ -1,3 +1,7 @@
+import dns from "dns";
+// Force IPv4 first to avoid DNS resolution timeouts with MongoDB Atlas
+dns.setDefaultResultOrder("ipv4first");
+
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 dotenv.config();
@@ -28,7 +32,7 @@ const connectDB = async () => {
 connectDB();
 
 // Global middleware
-app.beforeEach(cors());
+app.beforeEach(cors({ origin: "http://localhost:3000", credentials: true }));
 app.beforeEach(parseJSON());
 
 // SSE endpoint - clients connect here for real-time events

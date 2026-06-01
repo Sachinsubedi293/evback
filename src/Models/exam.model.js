@@ -5,6 +5,40 @@ const examSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  description: {
+    type: String,
+    default: "",
+  },
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true,
+    index: true,
+  },
+  visibility: {
+    type: String,
+    enum: ["private", "invite", "public"],
+    default: "invite",
+    index: true,
+  },
+  inviteCode: {
+    type: String,
+    unique: true,
+    sparse: true,
+    index: true,
+  },
+  invitedStudents: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+  ],
+  joinedStudents: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+  ],
   totalStudents: {
     type: Number,
     required: true,
@@ -25,6 +59,12 @@ const examSchema = new mongoose.Schema({
     type: String,
     enum: ["scheduled", "ongoing", "completed"],
     default: "scheduled",
+  },
+  startedAt: {
+    type: Date,
+  },
+  completedAt: {
+    type: Date,
   },
   Code: {
     type: Number,

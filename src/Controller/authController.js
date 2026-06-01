@@ -7,7 +7,9 @@ import { v4 as uuidv4 } from "uuid";
 dotenv.config();
 
 const generateAccessToken = (userId, role, code) => {
-  return jwt.sign({ userId, role, Code: code }, process.env.JWT_SECRET, { expiresIn: "1d" });
+  return jwt.sign({ userId, role, Code: code }, process.env.JWT_SECRET, {
+    expiresIn: "1d",
+  });
 };
 
 const generateRefreshToken = (userId) => {
@@ -28,15 +30,20 @@ const signup = async (req, res) => {
   try {
     const existingUser = await User.findOne({ $or: [{ username }, { email }] });
     if (existingUser) {
-      return res.status(400).json({ error: "Username or email already exists" });
+      return res
+        .status(400)
+        .json({ error: "Username or email already exists" });
     }
 
     const uniqueCode = generateUniqueCode();
+    const saltRounds = 10;
+    const hashed = await bcrypt.hash(password, saltRounds);
+
     const newUser = new User({
       Code: uniqueCode,
       username,
       email,
-      password,
+      password: hashed,
       fullname,
       role,
     });
@@ -92,9 +99,14 @@ const createStudents = async (req, res) => {
       const username = `${usernamePattern}${uniqueNumber}`;
       const email = `student${uniqueNumber}@mcqs.ev.org`;
 
+      const saltRounds = 10;
+      const hashedPassword = await bcrypt.hash(
+        `${password}${uniqueNumber}`,
+        saltRounds,
+      );
       const student = new User({
         username,
-        password: `${password}${uniqueNumber}`,
+        password: hashedPassword,
         role: "student",
         email,
         Code: code,
@@ -121,7 +133,7 @@ const login = async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    const isPasswordMatch = password === user.password;
+    const isPasswordMatch = await bcrypt.compare(password, user.password);
     if (!isPasswordMatch) {
       return res.status(401).json({ error: "Invalid password" });
     }
@@ -135,6 +147,8 @@ const login = async (req, res) => {
     res.status(200).json({
       message: "Login successful",
       admin: user.role == "admin" ? true : false,
+      role: user.role,
+      userId: user._id,
       accessToken,
       refreshToken,
     });
@@ -178,7 +192,7 @@ const refreshToken = async (req, res) => {
 
 const getStudents = async (req, res) => {
   try {
-    const students = await User.find({ role: "student" });
+    const students = await User.find({ role: "student" }).select("-password");
     res.json(students);
   } catch (error) {
     console.error("Error fetching students:", error);
@@ -208,6 +222,45 @@ const deleteStudents = async (req, res) => {
   }
 };
 
+const createGuest = async (req, res) => {
+  try {
+    // create a temporary student user
+    const uniqueNumber = Math.floor(100000 + Math.random() * 900000);
+    const username = `guest${uniqueNumber}`;
+    const email = `guest${uniqueNumber}@mcqs.ev.org`;
+    const password = `${username}`;
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+    const Code = generateUniqueCode();
+
+    const guest = new User({
+      username,
+      email,
+      password: hashedPassword,
+      role: "student",
+      Code,
+    });
+    await guest.save();
+
+    const accessToken = generateAccessToken(guest._id, guest.role, guest.Code);
+    const refreshToken = generateRefreshToken(guest._id);
+    guest.refreshToken = refreshToken;
+    await guest.save();
+
+    return res
+      .status(201)
+      .json({
+        message: "Guest created",
+        userId: guest._id,
+        accessToken,
+        refreshToken,
+      });
+  } catch (error) {
+    console.error("Error creating guest:", error);
+    return res.status(500).json({ error: "Failed to create guest" });
+  }
+};
+
 export default {
   signup,
   login,
@@ -215,4 +268,5 @@ export default {
   refreshToken,
   createStudents,
   deleteStudents,
+  createGuest,
 };

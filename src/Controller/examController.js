@@ -5,9 +5,59 @@ import Exam from "../Models/exam.model.js";
 import { emit, emitToRoom } from "../sse.js";
 import { v4 as uuidv4 } from "uuid";
 
-const jwtverify = (token) => {
-  const tokenPart = token.split(" ")[1];
+const VALID_VISIBILITIES = new Set(["private", "invite", "public"]);
+
+const getTokenParts = (token) => {
+  const tokenPart = token.split(" ")[1] || token;
   return jwt.verify(tokenPart, process.env.JWT_SECRET);
+};
+
+const getAuthenticatedUser = async (token) => {
+  if (!token) {
+    return null;
+  }
+
+  const decodedToken = getTokenParts(token);
+  return User.findById(decodedToken.userId);
+};
+
+const canManageExam = (user, exam) => {
+  if (!user || !exam) {
+    return false;
+  }
+
+  if (user.role === "admin") {
+    return true;
+  }
+
+  return user.role === "teacher" && String(exam.createdBy) === String(user._id);
+};
+
+const canAccessExam = (user, exam) => {
+  if (!user || !exam) {
+    return false;
+  }
+
+  if (canManageExam(user, exam)) {
+    return true;
+  }
+
+  if (exam.visibility === "public") {
+    return true;
+  }
+
+  const joined = (exam.joinedStudents || []).some(
+    (studentId) => String(studentId) === String(user._id),
+  );
+  const invited = (exam.invitedStudents || []).some(
+    (studentId) => String(studentId) === String(user._id),
+  );
+
+  return joined || invited;
+};
+
+const jwtverify = (token) => {
+  return getTokenParts(token);
 };
 
 // Function to start the exam
@@ -21,6 +71,7 @@ const startExam = async (examId) => {
 
     if (exam.startDate <= new Date() && exam.status === "scheduled") {
       exam.status = "ongoing";
+      exam.startedAt = new Date();
       await exam.save();
       console.log(`Exam ${examId} has started`);
 
@@ -49,6 +100,7 @@ const closeExam = async (examId) => {
 
     if (exam.endDate <= new Date() && exam.status === "ongoing") {
       exam.status = "completed";
+      exam.completedAt = new Date();
       await exam.save();
       console.log(`Exam ${examId} has completed`);
 
@@ -73,6 +125,30 @@ const generateUniqueCode = () => {
   return uniqueCode.toFixed(3);
 };
 
+const generateInviteCode = () => uuidv4().replace(/-/g, "");
+
+const buildExamQueryForUser = (user) => {
+  if (!user) {
+    return { status: "ongoing" };
+  }
+
+  if (user.role === "admin") {
+    return {};
+  }
+
+  if (user.role === "teacher") {
+    return { createdBy: user._id };
+  }
+
+  return {
+    $or: [
+      { visibility: "public" },
+      { invitedStudents: user._id },
+      { joinedStudents: user._id },
+    ],
+  };
+};
+
 // Function to create a new exam
 export const createExam = async (req, res) => {
   try {
@@ -84,22 +160,86 @@ export const createExam = async (req, res) => {
     const decodedToken = jwtverify(token);
 
     const user = await User.findById(decodedToken.userId);
-    if (!user || user.role !== "admin") {
+    if (!user || (user.role !== "admin" && user.role !== "teacher")) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const { name, startDate, endDate } = req.body;
+    const {
+      name,
+      title,
+      description = "",
+      startDate,
+      endDate,
+      startAt,
+      endAt,
+      durationMinutes,
+      visibility,
+      inviteMode,
+      private: isPrivate,
+      invitedStudents = [],
+    } = req.body;
 
-    const Code = generateUniqueCode();
+    const examName =
+      typeof title === "string" && title.trim()
+        ? title.trim()
+        : typeof name === "string" && name.trim()
+          ? name.trim()
+          : `Exam-${uuidv4()}`;
+
+    const normalizedDescription =
+      typeof description === "string" ? description.trim() : "";
+
+    const rawStart = startDate || startAt;
+    const rawEnd = endDate || endAt;
+    const parsedStartDate = rawStart ? new Date(rawStart) : null;
+    const parsedEndDate = rawEnd ? new Date(rawEnd) : null;
+
+    if (
+      !parsedStartDate ||
+      Number.isNaN(parsedStartDate.getTime()) ||
+      !parsedEndDate ||
+      Number.isNaN(parsedEndDate.getTime())
+    ) {
+      return res.status(400).json({
+        error: "Valid startDate/endDate or startAt/endAt are required",
+      });
+    }
+
+    const examVisibility =
+      isPrivate || inviteMode === "private"
+        ? "private"
+        : VALID_VISIBILITIES.has(visibility)
+          ? visibility
+          : "invite";
+
+    const derivedDurationMinutes =
+      typeof durationMinutes === "number" && Number.isFinite(durationMinutes)
+        ? durationMinutes
+        : Math.max(
+            1,
+            Math.round(
+              (parsedEndDate.getTime() - parsedStartDate.getTime()) /
+                (1000 * 60),
+            ),
+          );
+
+    const durationInMilliseconds =
+      parsedEndDate.getTime() - parsedStartDate.getTime();
+
+    if (durationInMilliseconds <= 0) {
+      return res
+        .status(400)
+        .json({ error: "endAt/endDate must be after startAt/startDate" });
+    }
     const students = User.find({ role: "student" });
-    const durationInMilliseconds = new Date(endDate) - new Date(startDate);
-    const duration = durationInMilliseconds / (1000 * 60);
-
     const overlappingExam = await Exam.findOne({
       $or: [
-        { startDate: { $lt: endDate, $gt: startDate } },
-        { endDate: { $gt: startDate, $lt: endDate } },
-        { startDate: { $lt: startDate }, endDate: { $gt: endDate } },
+        { startDate: { $lt: parsedEndDate, $gt: parsedStartDate } },
+        { endDate: { $gt: parsedStartDate, $lt: parsedEndDate } },
+        {
+          startDate: { $lt: parsedStartDate },
+          endDate: { $gt: parsedEndDate },
+        },
       ],
     });
 
@@ -109,30 +249,92 @@ export const createExam = async (req, res) => {
       });
     }
 
+    const Code = Number(generateUniqueCode());
+
     const exam = new Exam({
-      name,
+      name: examName,
+      description: normalizedDescription,
+      createdBy: user._id,
+      visibility: examVisibility,
+      inviteCode: generateInviteCode(),
+      invitedStudents,
+      joinedStudents: [],
       totalStudents: (await students).length,
-      duration,
-      startDate,
-      endDate,
+      duration: derivedDurationMinutes,
+      startDate: parsedStartDate,
+      endDate: parsedEndDate,
       Code,
       status: "scheduled",
     });
 
     await exam.save();
 
-    scheduleExamStart(exam._id, startDate, endDate);
+    scheduleExamStart(exam._id, parsedStartDate, parsedEndDate);
 
-    res.status(201).json({ message: "Exam created successfully" });
+    res
+      .status(201)
+      .json({ message: "Exam created successfully", examId: exam._id, exam });
   } catch (error) {
     console.error("Error creating exam:", error);
     res.status(500).json({ error: "Failed to create exam" });
   }
 };
 
+export const joinExam = async (req, res) => {
+  try {
+    const token = req.headers.authorization;
+    if (!token) {
+      return res.status(401).json({ error: "No token provided" });
+    }
+
+    const user = await getAuthenticatedUser(token);
+    if (!user || user.role !== "student") {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { inviteCode } = req.body;
+    if (!inviteCode) {
+      return res.status(400).json({ error: "Invite code is required" });
+    }
+
+    const exam = await Exam.findOne({ inviteCode });
+    if (!exam) {
+      return res.status(404).json({ error: "Invite not found" });
+    }
+
+    const now = new Date();
+    if (
+      exam.status === "completed" ||
+      (exam.endDate && new Date(exam.endDate) <= now)
+    ) {
+      return res.status(400).json({ error: "This exam has finished" });
+    }
+
+    const alreadyJoined = (exam.joinedStudents || []).some(
+      (studentId) => String(studentId) === String(user._id),
+    );
+    if (!alreadyJoined) {
+      exam.joinedStudents = [...(exam.joinedStudents || []), user._id];
+      await exam.save();
+    }
+
+    return res.status(200).json({
+      message: "Joined exam successfully",
+      examId: exam._id,
+      inviteCode: exam.inviteCode,
+    });
+  } catch (error) {
+    console.error("Error joining exam:", error);
+    return res.status(500).json({ error: "Failed to join exam" });
+  }
+};
+
 export const getOngoingExams = async (req, res) => {
   try {
-    const exams = await Exam.find({ status: { $in: ["ongoing"] } });
+    const token = req.headers.authorization;
+    const user = await getAuthenticatedUser(token);
+    const query = buildExamQueryForUser(user);
+    const exams = await Exam.find({ ...query, status: { $in: ["ongoing"] } });
     res.status(200).json(exams);
   } catch (error) {
     console.error("Error retrieving exams:", error);
@@ -142,11 +344,109 @@ export const getOngoingExams = async (req, res) => {
 
 export const getAllExams = async (req, res) => {
   try {
-    const exams = await Exam.find();
+    const token = req.headers.authorization;
+    const user = await getAuthenticatedUser(token);
+
+    if (!user) {
+      const exams = await Exam.find({
+        visibility: "public",
+        status: { $in: ["ongoing", "scheduled"] },
+      });
+      return res.status(200).json(exams);
+    }
+
+    if (user.role === "student") {
+      const exams = await Exam.find({
+        $or: [
+          { visibility: "public" },
+          { invitedStudents: user._id },
+          { joinedStudents: user._id },
+        ],
+      });
+      return res.status(200).json(exams);
+    }
+
+    const exams =
+      user.role === "teacher"
+        ? await Exam.find({ createdBy: user._id })
+        : await Exam.find();
     res.status(200).json(exams);
   } catch (error) {
     console.error("Error retrieving exams:", error);
     res.status(500).json({ error: "Failed to retrieve exams" });
+  }
+};
+
+export const getExamById = async (req, res) => {
+  try {
+    const { examId } = req.params;
+    const token = req.headers.authorization;
+    const user = await getAuthenticatedUser(token);
+    const exam = await Exam.findById(examId);
+
+    if (!exam) {
+      return res.status(404).json({ error: "Exam not found" });
+    }
+
+    if (!canAccessExam(user, exam)) {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+
+    return res.status(200).json(exam);
+  } catch (error) {
+    console.error("Error retrieving exam:", error);
+    return res.status(500).json({ error: "Failed to retrieve exam" });
+  }
+};
+
+export const getMyExams = async (req, res) => {
+  try {
+    const token = req.headers.authorization;
+    const user = await getAuthenticatedUser(token);
+    if (!user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const exams =
+      user.role === "teacher"
+        ? await Exam.find({ createdBy: user._id }).sort({ created_date: -1 })
+        : await Exam.find({ invitedStudents: user._id }).sort({
+            created_date: -1,
+          });
+
+    return res.status(200).json(exams);
+  } catch (error) {
+    console.error("Error retrieving my exams:", error);
+    return res.status(500).json({ error: "Failed to retrieve exams" });
+  }
+};
+
+export const getInviteLink = async (req, res) => {
+  try {
+    const token = req.headers.authorization;
+    const user = await getAuthenticatedUser(token);
+    if (!user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { examId } = req.params;
+    const exam = await Exam.findById(examId);
+    if (!exam) {
+      return res.status(404).json({ error: "Exam not found" });
+    }
+
+    if (!canManageExam(user, exam)) {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+
+    return res.status(200).json({
+      examId: exam._id,
+      inviteCode: exam.inviteCode,
+      inviteLink: `${req.headers.origin || ""}/exam/join/${exam.inviteCode}`,
+    });
+  } catch (error) {
+    console.error("Error creating invite link:", error);
+    return res.status(500).json({ error: "Failed to create invite link" });
   }
 };
 
@@ -158,11 +458,9 @@ export const deleteExam = async (req, res) => {
       return res.status(401).json({ error: "No token provided" });
     }
 
-    const tokenPart = token.split(" ")[1];
-    const decodedToken = jwt.verify(tokenPart, process.env.JWT_SECRET);
-
-    const user = await User.findById(decodedToken.userId);
-    if (!user || user.role !== "admin") {
+    const user = await getAuthenticatedUser(token);
+    const exam = await Exam.findById(examid);
+    if (!user || (!canManageExam(user, exam) && user.role !== "admin")) {
       return res.status(401).json({ error: "Unauthorized" });
     }
     await Exam.deleteOne({ _id: examid });
