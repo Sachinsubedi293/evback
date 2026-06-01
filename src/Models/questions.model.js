@@ -4,7 +4,7 @@ const questionSchema = new mongoose.Schema({
   exam: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Exam",
-    required: true,
+    required: false, // Now optional — questions can exist in a question bank without an exam
   },
   question: {
     type: String,
@@ -17,6 +17,14 @@ const questionSchema = new mongoose.Schema({
   correctAnswer: {
     type: String,
     required: true,
+  },
+  explanation: {
+    type: String,
+    default: "",
+  },
+  marks: {
+    type: Number,
+    default: 1,
   },
 });
 

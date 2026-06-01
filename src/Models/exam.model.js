@@ -70,6 +70,13 @@ const examSchema = new mongoose.Schema({
     type: Number,
     required: true,
   },
+  // Questions assigned to this exam from the question bank
+  questions: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Question",
+    },
+  ],
   created_date: {
     type: Date,
     default: Date.now,

@@ -127,6 +127,35 @@ const generateUniqueCode = () => {
 
 const generateInviteCode = () => uuidv4().replace(/-/g, "");
 
+export const syncExamStatus = async (exam) => {
+  if (!exam) {
+    return exam;
+  }
+
+  const now = new Date();
+  let changed = false;
+
+  if (exam.endDate && new Date(exam.endDate) <= now) {
+    if (exam.status !== "completed") {
+      exam.status = "completed";
+      exam.completedAt = exam.completedAt || now;
+      changed = true;
+    }
+  } else if (exam.startDate && new Date(exam.startDate) <= now) {
+    if (exam.status !== "ongoing") {
+      exam.status = "ongoing";
+      exam.startedAt = exam.startedAt || now;
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    await exam.save();
+  }
+
+  return exam;
+};
+
 const buildExamQueryForUser = (user) => {
   if (!user) {
     return { status: "ongoing" };
@@ -269,6 +298,8 @@ export const createExam = async (req, res) => {
 
     await exam.save();
 
+    await syncExamStatus(exam);
+
     scheduleExamStart(exam._id, parsedStartDate, parsedEndDate);
 
     res
@@ -302,6 +333,8 @@ export const joinExam = async (req, res) => {
       return res.status(404).json({ error: "Invite not found" });
     }
 
+    await syncExamStatus(exam);
+
     const now = new Date();
     if (
       exam.status === "completed" ||
@@ -334,8 +367,15 @@ export const getOngoingExams = async (req, res) => {
     const token = req.headers.authorization;
     const user = await getAuthenticatedUser(token);
     const query = buildExamQueryForUser(user);
-    const exams = await Exam.find({ ...query, status: { $in: ["ongoing"] } });
-    res.status(200).json(exams);
+    const exams = await Exam.find(query);
+    const syncedExams = [];
+    for (const exam of exams) {
+      const syncedExam = await syncExamStatus(exam);
+      if (syncedExam.status === "ongoing") {
+        syncedExams.push(syncedExam);
+      }
+    }
+    res.status(200).json(syncedExams);
   } catch (error) {
     console.error("Error retrieving exams:", error);
     res.status(500).json({ error: "Failed to retrieve exams" });
@@ -347,12 +387,26 @@ export const getAllExams = async (req, res) => {
     const token = req.headers.authorization;
     const user = await getAuthenticatedUser(token);
 
+    const { status } = req.query;
+
+    // Validate status filter if provided
+    const VALID_STATUSES = new Set(["scheduled", "ongoing", "completed"]);
+    if (status && !VALID_STATUSES.has(status)) {
+      return res.status(400).json({ error: `Invalid status filter. Allowed values: ${[...VALID_STATUSES].join(", ")}` });
+    }
+
+    const statusFilter = status ? { status } : {};
+
     if (!user) {
       const exams = await Exam.find({
         visibility: "public",
-        status: { $in: ["ongoing", "scheduled"] },
+        ...statusFilter,
       });
-      return res.status(200).json(exams);
+      const syncedExams = [];
+      for (const exam of exams) {
+        syncedExams.push(await syncExamStatus(exam));
+      }
+      return res.status(200).json(syncedExams);
     }
 
     if (user.role === "student") {
@@ -362,21 +416,30 @@ export const getAllExams = async (req, res) => {
           { invitedStudents: user._id },
           { joinedStudents: user._id },
         ],
+        ...statusFilter,
       });
-      return res.status(200).json(exams);
+      const syncedExams = [];
+      for (const exam of exams) {
+        syncedExams.push(await syncExamStatus(exam));
+      }
+      return res.status(200).json(syncedExams);
     }
 
-    const exams =
-      user.role === "teacher"
-        ? await Exam.find({ createdBy: user._id })
-        : await Exam.find();
-    res.status(200).json(exams);
+    const baseQuery = user.role === "teacher" ? { createdBy: user._id } : {};
+    const exams = await Exam.find({
+      ...baseQuery,
+      ...statusFilter,
+    });
+    const syncedExams = [];
+    for (const exam of exams) {
+      syncedExams.push(await syncExamStatus(exam));
+    }
+    res.status(200).json(syncedExams);
   } catch (error) {
     console.error("Error retrieving exams:", error);
     res.status(500).json({ error: "Failed to retrieve exams" });
   }
 };
-
 export const getExamById = async (req, res) => {
   try {
     const { examId } = req.params;
@@ -387,6 +450,8 @@ export const getExamById = async (req, res) => {
     if (!exam) {
       return res.status(404).json({ error: "Exam not found" });
     }
+
+    await syncExamStatus(exam);
 
     if (!canAccessExam(user, exam)) {
       return res.status(403).json({ error: "Unauthorized" });
@@ -413,6 +478,10 @@ export const getMyExams = async (req, res) => {
         : await Exam.find({ invitedStudents: user._id }).sort({
             created_date: -1,
           });
+
+    for (const exam of exams) {
+      await syncExamStatus(exam);
+    }
 
     return res.status(200).json(exams);
   } catch (error) {

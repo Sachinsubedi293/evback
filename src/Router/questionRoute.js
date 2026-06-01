@@ -7,6 +7,18 @@ const questionRoute = (app, prefix) => {
     `${prefix}/questions/bulk`,
     questionController.bulkCreateQuestions,
   );
+  // Assign/unassign routes MUST come before the :id parameterized route
+  // to avoid "assign"/"unassign" being matched as an ID
+  app.route(
+    "post",
+    `${prefix}/questions/assign`,
+    questionController.assignQuestionsToExam,
+  );
+  app.route(
+    "post",
+    `${prefix}/questions/unassign`,
+    questionController.unassignQuestionsFromExam,
+  );
   app.route("get", `${prefix}/questions`, questionController.getAllQuestions);
   app.route(
     "get",

@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import User from "../Models/user.model.js";
 import { calculateAndSaveResult } from "../Calc.js";
 import mongoose from "mongoose";
+import { syncExamStatus } from "./examController.js";
 
 const jwtverify = (token) => {
   const tokenPart = token.split(" ")[1];
@@ -41,6 +42,8 @@ const answerController = {
         return res.status(404).json({ error: "Exam not found" });
       }
 
+      await syncExamStatus(allowedExam);
+
       if (allowedExam.status !== "ongoing") {
         return res.status(400).json({ error: "Exam is not active" });
       }
@@ -55,11 +58,9 @@ const answerController = {
         );
 
       if (!allowedStudent && user.role === "student") {
-        return res
-          .status(403)
-          .json({
-            error: "You are not allowed to submit answers for this exam",
-          });
+        return res.status(403).json({
+          error: "You are not allowed to submit answers for this exam",
+        });
       }
 
       if (!answers || typeof answers !== "object") {
