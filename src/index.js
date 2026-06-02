@@ -25,7 +25,7 @@ const PORT = process.env.PORT || 5000;
  * =========================
  */
 
-const allowedOrigins = (process.env.CORS_ORIGIN || "")
+const allowedOrigins = (process.env.CORS_ORIGIN || "https://evmcq.vercel.app")
   .split(",")
   .map((o) => o.trim())
   .filter(Boolean);
