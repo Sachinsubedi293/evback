@@ -1,5 +1,5 @@
 import dns from "dns";
-// Force IPv4 first to avoid DNS resolution timeouts with MongoDB Atlas
+// Force IPv4 first to avoid MongoDB Atlas DNS issues
 dns.setDefaultResultOrder("ipv4first");
 
 import mongoose from "mongoose";
@@ -17,38 +17,70 @@ import examRoute from "./Router/examRoute.js";
 import resultRoute from "./Router/resultRoute.js";
 
 const app = cpeak();
-
 const PORT = process.env.PORT || 5000;
 
-// Parse allowed CORS origins from env (comma-separated)
-const allowedOrigins = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim())
-  : ["http://localhost:3000"];
+/**
+ * =========================
+ * CORS CONFIG (FIXED)
+ * =========================
+ */
 
-// Custom CORS middleware that echoes back the exact request origin
-// (required for credentialed requests — browsers reject '*' with credentials: true)
+const allowedOrigins = (process.env.CORS_ORIGIN || "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+const isAllowedOrigin = (origin) => {
+  if (!origin) return false;
+
+  // exact match
+  if (allowedOrigins.includes(origin)) return true;
+
+  // allow all Vercel preview domains (optional but recommended)
+  if (/\.vercel\.app$/.test(origin)) return true;
+
+  return false;
+};
+
 app.beforeEach((req, res) => {
   const origin = req.headers.origin;
 
-  if (origin) {
-    // If the request origin is in the allowed list, echo it back exactly
-    if (allowedOrigins.includes(origin)) {
-      res.setHeader("Access-Control-Allow-Origin", origin);
-    }
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-    res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS,PATCH,DELETE,POST,PUT");
-    res.setHeader("Access-Control-Allow-Headers", "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version");
+  if (isAllowedOrigin(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
   }
 
-  // Handle OPTIONS preflight immediately
+  // REQUIRED for cookies / auth headers
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+
+  // Preflight caching safety
+  res.setHeader("Vary", "Origin");
+
+  // Methods allowed
+  res.setHeader(
+    "Access-Control-Allow-Methods",
+    "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+  );
+
+  // Headers allowed from frontend
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Requested-With, Accept",
+  );
+
+  // Handle preflight request
   if (req.method === "OPTIONS") {
     return res.status(204).end();
   }
 });
+
 app.beforeEach(parseJSON());
 
-// SSE endpoint - clients connect here for real-time events
-// Query param ?room=examId optionally joins them to an exam room immediately
+/**
+ * =========================
+ * SSE SETUP
+ * =========================
+ */
+
 app.route("get", "/events", (req, res) => {
   const client = setupSSE(req, res);
   if (req.query.room) {
@@ -56,13 +88,15 @@ app.route("get", "/events", (req, res) => {
   }
 });
 
-// Initialize Redis Pub/Sub for multi-process scaling (if REDIS_URL is set)
 initRedis();
-
-// Start heartbeat to detect stale connections
 startHeartbeat();
 
-// Mount routes under the '/api' namespace
+/**
+ * =========================
+ * ROUTES
+ * =========================
+ */
+
 const mountRoutes = (prefix, routeHandler) => {
   routeHandler(app, prefix);
 };
@@ -73,18 +107,27 @@ mountRoutes("/api", answerRoute);
 mountRoutes("/api", examRoute);
 mountRoutes("/api", resultRoute);
 
-// Handle invalid routes
+/**
+ * =========================
+ * ERROR HANDLING
+ * =========================
+ */
+
 app.fallback((req, res) => {
   return res.status(404).json({ error: "Route not found" });
 });
 
-// Error handling middleware
 app.handleErr((error, req, res) => {
   console.error("Error:", error);
   return res.status(500).json({ error: "Internal server error" });
 });
 
-// Start the server
+/**
+ * =========================
+ * START SERVER
+ * =========================
+ */
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
