@@ -1,3 +1,4 @@
+import { Router } from "express";
 import {
   createExam,
   getAllExams,
@@ -10,31 +11,35 @@ import {
   startExamNow,
 } from "../Controller/examController.js";
 
-const examRoute = (app, prefix) => {
-  app.route("post", `${prefix}/exam`, createExam);
-  app.route("post", `${prefix}/exam/`, createExam);
-  app.route("get", `${prefix}/exam`, getOngoingExams);
-  app.route("get", `${prefix}/exam/`, getOngoingExams);
-  app.route("get", `${prefix}/allexam`, getAllExams);
-  app.route("get", `${prefix}/allexam/`, getAllExams);
-  app.route("get", `${prefix}/myexams`, getMyExams);
-  app.route("get", `${prefix}/myexams/`, getMyExams);
-  app.route("get", `${prefix}/exam/:examId`, getExamById);
-  app.route("get", `${prefix}/exam/:examId/`, getExamById);
-  app.route("post", `${prefix}/exam/join`, joinExam);
-  app.route("post", `${prefix}/exam/join/`, joinExam);
-  app.route("post", `${prefix}/join-exam`, joinExam);
-  app.route("post", `${prefix}/join-exam/`, joinExam);
-  app.route("get", `${prefix}/exam/:examId/invite`, getInviteLink);
-  app.route("get", `${prefix}/exam/:examId/invite/`, getInviteLink);
-  app.route("post", `${prefix}/exam/:examId/start`, startExamNow);
-  app.route("post", `${prefix}/exam/:examId/start/`, startExamNow);
-  app.route("delete", `${prefix}/delexam`, deleteExam);
-  app.route("delete", `${prefix}/delexam/`, deleteExam);
+// Router for /exam paths
+export const examRouter = Router();
 
-  app.route("get", `${prefix}/server-time`, (req, res) => {
-    return res.json({ serverTime: new Date().toISOString() });
-  });
-};
+examRouter.post("/", createExam);
+examRouter.get("/", getOngoingExams);
+examRouter.post("/join", joinExam);
+examRouter.get("/join/:inviteCode", joinExam);
+examRouter.get("/:examId", getExamById);
+examRouter.get("/:examId/invite", getInviteLink);
+examRouter.post("/:examId/start", startExamNow);
 
-export default examRoute;
+// Router for /allexam
+export const allExamRouter = Router();
+allExamRouter.get("/", getAllExams);
+
+// Router for /myexams
+export const myExamsRouter = Router();
+myExamsRouter.get("/", getMyExams);
+
+// Router for /join-exam
+export const joinExamRouter = Router();
+joinExamRouter.post("/", joinExam);
+
+// Router for /delexam
+export const deleteExamRouter = Router();
+deleteExamRouter.delete("/", deleteExam);
+
+// Router for /server-time
+export const serverTimeRouter = Router();
+serverTimeRouter.get("/", (req, res) => {
+  res.json({ serverTime: new Date().toISOString() });
+});

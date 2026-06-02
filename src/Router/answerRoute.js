@@ -1,10 +1,11 @@
+import { Router } from "express";
 import answerController from "../Controller/answerController.js";
 
-const answerRoute = (app, prefix) => {
-  app.route("post", `${prefix}/answers`, answerController.submitAnswers);
-  app.route("get", `${prefix}/answers`, answerController.getAnswers);
-  app.route("put", `${prefix}/answers/:id`, answerController.updateAnswer);
-  app.route("delete", `${prefix}/answers/:id`, answerController.deleteAnswer);
-};
+const router = Router();
 
-export default answerRoute;
+router.post("/", answerController.submitAnswers);
+router.get("/", answerController.getAnswers);
+router.put("/:id", answerController.updateAnswer);
+router.delete("/:id", answerController.deleteAnswer);
+
+export default router;

@@ -1,40 +1,15 @@
+import { Router } from "express";
 import questionController from "../Controller/questionController.js";
 
-const questionRoute = (app, prefix) => {
-  app.route("post", `${prefix}/questions`, questionController.createQuestion);
-  app.route(
-    "post",
-    `${prefix}/questions/bulk`,
-    questionController.bulkCreateQuestions,
-  );
-  // Assign/unassign routes MUST come before the :id parameterized route
-  // to avoid "assign"/"unassign" being matched as an ID
-  app.route(
-    "post",
-    `${prefix}/questions/assign`,
-    questionController.assignQuestionsToExam,
-  );
-  app.route(
-    "post",
-    `${prefix}/questions/unassign`,
-    questionController.unassignQuestionsFromExam,
-  );
-  app.route("get", `${prefix}/questions`, questionController.getAllQuestions);
-  app.route(
-    "get",
-    `${prefix}/questions/:id`,
-    questionController.getQuestionById,
-  );
-  app.route(
-    "put",
-    `${prefix}/questions/:id`,
-    questionController.updateQuestionById,
-  );
-  app.route(
-    "delete",
-    `${prefix}/questions/:id`,
-    questionController.deleteQuestionById,
-  );
-};
+const router = Router();
 
-export default questionRoute;
+router.post("/", questionController.createQuestion);
+router.post("/bulk", questionController.bulkCreateQuestions);
+router.post("/assign", questionController.assignQuestionsToExam);
+router.post("/unassign", questionController.unassignQuestionsFromExam);
+router.get("/", questionController.getAllQuestions);
+router.get("/:id", questionController.getQuestionById);
+router.put("/:id", questionController.updateQuestionById);
+router.delete("/:id", questionController.deleteQuestionById);
+
+export default router;

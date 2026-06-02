@@ -1,13 +1,13 @@
 import authController from "../Controller/authController.js";
 
-const authRoute = (app, prefix) => {
-  app.route("post", `${prefix}/signup`, authController.signup);
-  app.route("post", `${prefix}/login`, authController.login);
-  app.route("post", `${prefix}/guest`, authController.createGuest);
-  app.route("post", `${prefix}/refresh`, authController.refreshToken);
-  app.route("get", `${prefix}/students`, authController.getStudents);
-  app.route("post", `${prefix}/students`, authController.createStudents);
-  app.route("delete", `${prefix}/delstudents`, authController.deleteStudents);
+const authRoute = (app) => {
+  app.post("/api/signup", authController.signup);
+  app.post("/api/login", authController.login);
+  app.post("/api/guest", authController.createGuest);
+  app.post("/api/refresh", authController.refreshToken);
+  app.get("/api/students", authController.getStudents);
+  app.post("/api/students", authController.createStudents);
+  app.delete("/api/delstudents", authController.deleteStudents);
 };
 
 export default authRoute;
