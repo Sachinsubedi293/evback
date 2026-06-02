@@ -7,6 +7,8 @@ router.post("/", questionController.createQuestion);
 router.post("/bulk", questionController.bulkCreateQuestions);
 router.post("/assign", questionController.assignQuestionsToExam);
 router.post("/unassign", questionController.unassignQuestionsFromExam);
+router.get("/ids", questionController.getQuestionIds);
+router.get("/categories", questionController.getCategories);
 router.get("/", questionController.getAllQuestions);
 router.get("/:id", questionController.getQuestionById);
 router.put("/:id", questionController.updateQuestionById);

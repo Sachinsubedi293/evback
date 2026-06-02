@@ -273,23 +273,6 @@ export const createExam = async (req, res) => {
         .json({ error: "endAt/endDate must be after startAt/startDate" });
     }
     const students = User.find({ role: "student" });
-    const overlappingExam = await Exam.findOne({
-      $or: [
-        { startDate: { $lt: parsedEndDate, $gt: parsedStartDate } },
-        { endDate: { $gt: parsedStartDate, $lt: parsedEndDate } },
-        {
-          startDate: { $lt: parsedStartDate },
-          endDate: { $gt: parsedEndDate },
-        },
-      ],
-    });
-
-    if (overlappingExam) {
-      return res.status(400).json({
-        error: "An exam is already scheduled during this time period",
-      });
-    }
-
     const Code = Number(generateUniqueCode());
 
     const exam = new Exam({

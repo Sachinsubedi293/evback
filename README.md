@@ -308,3 +308,10 @@ This project was migrated from Express + Socket.IO to Cpeak + SSE:
 ### Vulnerability Fix
 
 Updated `bcrypt` from `^5.1.1` → `^6.0.0` to eliminate 2 high-severity `tar` vulnerabilities (GHSA-34x7-hfp2-rc4v, GHSA-8qq5-rm4j-mr97).
+
+
+
+
+
+Parallel exam needed can be able to take by one teacher
+Add Category for question for diff subjects that teacher creates such in question choose able o filter by question text id or catgory and also add select all button to select all ids for the exam for questions
