@@ -20,6 +20,11 @@ const app = cpeak();
 
 const PORT = process.env.PORT || 8000;
 
+// Parse CORS origins from env (comma-separated), fallback to localhost:3000
+const corsOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim())
+  : "http://localhost:3000";
+
 const connectDB = async () => {
   try {
     await mongoose.connect(process.env.URI);
@@ -32,7 +37,7 @@ const connectDB = async () => {
 connectDB();
 
 // Global middleware
-app.beforeEach(cors({ origin: "http://localhost:3000", credentials: true }));
+app.beforeEach(cors({ origin: corsOrigins, credentials: true }));
 app.beforeEach(parseJSON());
 
 // SSE endpoint - clients connect here for real-time events
