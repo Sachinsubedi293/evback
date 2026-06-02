@@ -80,9 +80,12 @@ const answerController = {
 
       await newAnswer.save();
 
-      await calculateAndSaveResult(user._id, exam);
-
-      res.status(201).json({ message: "Answers submitted successfully" });
+      // Results are calculated in bulk when the exam ends — not immediately.
+      res.status(201).json({
+        message: "Answers saved. Your result will be available after the exam ends.",
+        submitted: true,
+        resultPending: true,
+      });
     } catch (error) {
       console.error("Error submitting answers:", error);
       res.status(500).json({ error: "Internal server error" });

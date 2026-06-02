@@ -7,6 +7,7 @@ import {
   getMyExams,
   joinExam,
   deleteExam,
+  startExamNow,
 } from "../Controller/examController.js";
 
 const examRoute = (app, prefix) => {
@@ -26,8 +27,11 @@ const examRoute = (app, prefix) => {
   app.route("post", `${prefix}/join-exam/`, joinExam);
   app.route("get", `${prefix}/exam/:examId/invite`, getInviteLink);
   app.route("get", `${prefix}/exam/:examId/invite/`, getInviteLink);
+  app.route("post", `${prefix}/exam/:examId/start`, startExamNow);
+  app.route("post", `${prefix}/exam/:examId/start/`, startExamNow);
   app.route("delete", `${prefix}/delexam`, deleteExam);
   app.route("delete", `${prefix}/delexam/`, deleteExam);
+
   app.route("get", `${prefix}/server-time`, (req, res) => {
     return res.json({ serverTime: new Date().toISOString() });
   });

@@ -5,6 +5,7 @@ import User from "../Models/user.model.js";
 import Exam from "../Models/exam.model.js";
 import { emit, emitToRoom } from "../sse.js";
 import { v4 as uuidv4 } from "uuid";
+import { releaseResultsForExam } from "../Calc.js";
 
 const VALID_VISIBILITIES = new Set(["private", "invite", "public"]);
 
@@ -99,14 +100,24 @@ const closeExam = async (examId) => {
       return;
     }
 
-    if (exam.endDate <= new Date() && exam.status === "ongoing") {
+    if (exam.status === "ongoing") {
       exam.status = "completed";
       exam.completedAt = new Date();
       await exam.save();
       console.log(`Exam ${examId} has completed`);
 
-      // Notify only clients in this exam room that the exam has completed
-      emitToRoom(String(examId), "ExamComplete", true);
+      // Notify all room clients the exam is over
+      emitToRoom(String(examId), "ExamComplete", { examId: String(examId) });
+
+      // Calculate scores and release result codes for every student
+      const releases = await releaseResultsForExam(examId);
+      for (const { studentId, resultCode } of releases) {
+        emitToRoom(String(examId), "ResultsReady", {
+          examId: String(examId),
+          studentId,
+          resultCode,
+        });
+      }
     }
   } catch (error) {
     console.error(`Error completing exam ${examId}:`, error);
@@ -548,3 +559,52 @@ export const deleteExam = async (req, res) => {
     res.status(500).json({ error: "Failed to delete exam" });
   }
 };
+
+export const startExamNow = async (req, res) => {
+  try {
+    const { examId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(examId)) {
+      return res.status(400).json({ error: "Invalid exam ID" });
+    }
+
+    const token = req.headers.authorization;
+    const user = await getAuthenticatedUser(token);
+    const exam = await Exam.findById(examId);
+
+    if (!exam) {
+      return res.status(404).json({ error: "Exam not found" });
+    }
+
+    if (!canManageExam(user, exam)) {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+
+    if (exam.status !== "scheduled") {
+      return res.status(400).json({ error: `Exam is already in ${exam.status} status` });
+    }
+
+    exam.status = "ongoing";
+    exam.startedAt = new Date();
+    exam.startDate = exam.startedAt;
+    await exam.save();
+
+    console.log(`Exam ${examId} has been manually started by teacher`);
+
+    // Notify only clients in this exam room that the exam has started
+    emitToRoom(String(examId), "ExamStarted", {
+      examId: exam._id,
+      status: "ongoing",
+      startDate: exam.startDate,
+      endDate: exam.endDate,
+    });
+
+    // Schedule the exam stop
+    scheduleExamStop(examId, exam.endDate);
+
+    return res.status(200).json({ message: "Exam started successfully", exam });
+  } catch (error) {
+    console.error("Error manually starting exam:", error);
+    return res.status(500).json({ error: "Failed to start exam" });
+  }
+};
+
