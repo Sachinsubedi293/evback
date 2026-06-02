@@ -6,7 +6,7 @@ import mongoose from "mongoose";
 import dotenv from "dotenv";
 dotenv.config();
 
-import cpeak, { parseJSON, cors } from "cpeak";
+import cpeak, { parseJSON } from "cpeak";
 
 import { setupSSE, startHeartbeat, joinRoom, initRedis } from "./sse.js";
 
@@ -18,26 +18,33 @@ import resultRoute from "./Router/resultRoute.js";
 
 const app = cpeak();
 
-const PORT = process.env.PORT || 8000;
+const PORT = process.env.PORT || 5000;
 
-// Parse CORS origins from env (comma-separated), fallback to localhost:3000
-const corsOrigins = process.env.CORS_ORIGIN
+// Parse allowed CORS origins from env (comma-separated)
+const allowedOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim())
-  : "http://localhost:3000";
+  : ["http://localhost:3000"];
 
-const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.URI);
-    console.log("MongoDB Connected");
-  } catch (error) {
-    console.error("Error connecting to MongoDB:", error.message);
-    process.exit(1);
+// Custom CORS middleware that echoes back the exact request origin
+// (required for credentialed requests — browsers reject '*' with credentials: true)
+app.beforeEach((req, res) => {
+  const origin = req.headers.origin;
+
+  if (origin) {
+    // If the request origin is in the allowed list, echo it back exactly
+    if (allowedOrigins.includes(origin)) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+    }
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS,PATCH,DELETE,POST,PUT");
+    res.setHeader("Access-Control-Allow-Headers", "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version");
   }
-};
-connectDB();
 
-// Global middleware
-app.beforeEach(cors({ origin: corsOrigins, credentials: true }));
+  // Handle OPTIONS preflight immediately
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+});
 app.beforeEach(parseJSON());
 
 // SSE endpoint - clients connect here for real-time events
