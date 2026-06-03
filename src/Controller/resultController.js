@@ -64,27 +64,83 @@ const getExamResults = async (req, res) => {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
+    // Fetch all questions for this exam to get correct answers
+    const questions = await Question.find({ exam: examId }).select(
+      "question options correctAnswer",
+    );
+
+    // Build a map of questionId -> correctAnswer for quick lookup
+    const correctAnswerMap = {};
+    for (const question of questions) {
+      correctAnswerMap[String(question._id)] = question.correctAnswer;
+    }
+
+    // Fetch answers with student user populated
     const answers = await Answer.find({ exam: examId })
       .populate("user")
       .populate("answers.questionId");
-    const questions = await Question.find({ exam: examId }).select(
-      "question options",
-    );
 
-    const results = answers.map((answerDoc) => ({
-      student: answerDoc.user,
-      submittedAt: answerDoc.createdAt,
-      answers: answerDoc.answers.map((entry) => ({
-        questionId: entry.questionId?._id || entry.questionId,
-        question: entry.questionId?.question || null,
-        selectedAnswer: entry.answer,
-      })),
-    }));
+    // Calculate scores for each student
+    const results = answers.map((answerDoc) => {
+      let correctCount = 0;
+      const totalQuestions = answerDoc.answers.length;
+
+      const answerDetails = answerDoc.answers.map((entry) => {
+        const questionId = entry.questionId?._id || entry.questionId;
+        const correctAnswer = correctAnswerMap[String(questionId)] || null;
+        const selectedAnswer = entry.answer;
+        const isCorrect =
+          selectedAnswer && correctAnswer
+            ? selectedAnswer.trim().toLowerCase() === correctAnswer.trim().toLowerCase()
+            : false;
+
+        if (isCorrect) correctCount++;
+
+        return {
+          questionId,
+          question: entry.questionId?.question || null,
+          options: entry.questionId?.options || [],
+          selectedAnswer,
+          correctAnswer,
+          isCorrect,
+        };
+      });
+
+      return {
+        user: answerDoc.user,
+        student: answerDoc.user,
+        submittedAt: answerDoc.createdAt,
+        answers: answerDetails,
+        score: correctCount,
+        total: totalQuestions,
+        percentage:
+          totalQuestions > 0
+            ? Math.round((correctCount / totalQuestions) * 100)
+            : 0,
+      };
+    });
+
+    // Also fetch Result records (released results) to include any additional metadata
+    const resultRecords = await Result.find({ examId });
 
     return res.status(200).json({
       exam,
       questions,
       results,
+      // Include any pre-calculated result records (released data with codes)
+      releasedResults: resultRecords,
+      summary: {
+        totalStudents: results.length,
+        averageScore:
+          results.length > 0
+            ? Math.round(
+                results.reduce((sum, r) => sum + r.percentage, 0) /
+                  results.length,
+              )
+            : 0,
+        highestScore: results.length > 0 ? Math.max(...results.map(r => r.percentage)) : 0,
+        lowestScore: results.length > 0 ? Math.min(...results.map(r => r.percentage)) : 0,
+      },
     });
   } catch (error) {
     console.error("Error retrieving exam results:", error);
